@@ -1,0 +1,30 @@
+### Build Artifacts ###
+target/
+**/target/
+build/
+**/build/
+
+### Maven ###
+.mvn/
+mvnw
+mvnw.cmd
+.mvn/wrapper/maven-wrapper.jar
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+**/out/
+
+### VS Code ###
+.vscode/
+
+### OS specific ###
+.DS_Store
+Thumbs.db
+
+### Misc ###
+HELP.md
+*.log
