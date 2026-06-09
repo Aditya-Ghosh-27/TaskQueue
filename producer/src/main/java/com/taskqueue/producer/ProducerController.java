@@ -14,13 +14,16 @@ import redis.clients.jedis.Jedis;
 public class ProducerController {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private static final String QUEUE_NAME = "work_queue";
+    private static final String QUEUE_NAME = "task_queue";
 
     @PostMapping("/enqueue")
     public ResponseEntity<String> enqueueTask(@RequestBody Task task) {
         // Using a try-with-resources block ensures Jedis is thread-safe
         // and automatically closes the connection when finished.
-        try (Jedis jedis = new Jedis("localhost", 6379)) {
+
+        // 1. Dynamic Host Resolution for Docker
+        String redisHost = System.getenv().getOrDefault("REDIS_HOST", "localhost");
+        try (Jedis jedis = new Jedis(redisHost, 6379)) {
 
             String taskJson = objectMapper.writeValueAsString(task);
             jedis.lpush(QUEUE_NAME, taskJson);

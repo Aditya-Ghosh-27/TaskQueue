@@ -4,18 +4,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskqueue.common.Metrics;
 import com.taskqueue.common.Task;
 import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import redis.clients.jedis.Jedis;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 @Service
 public class WorkerService {
-
     private final Jedis jedis = new Jedis("localhost", 6379);
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private static final String QUEUE_NAME = "work_queue";
+    private static final String QUEUE_NAME = "task_queue";
 
     private final AtomicInteger jobsDone = new AtomicInteger(0);
     private final AtomicInteger jobsFailed = new AtomicInteger(0);
@@ -27,8 +28,9 @@ public class WorkerService {
     }
 
     private void runLoop() {
+        String redisHost = System.getenv().getOrDefault("REDIS_HOST", "localhost");
         // try-with-resources use korle connection auto-close hoy, crash kore na
-        try (Jedis jedis = new Jedis("localhost", 6379)) {
+        try (Jedis jedis = new Jedis(redisHost, 6379)) {
             System.out.println("Worker thread started using BRPOP. Waiting for tasks...");
             while (true) {
                 try {
@@ -45,6 +47,8 @@ public class WorkerService {
                     jobsFailed.incrementAndGet();
                 }
             }
+        } catch (Exception e) {
+            log.error("Fatal error connecting to Redis in Worker thread", e);
         }
     }
 
@@ -64,7 +68,14 @@ public class WorkerService {
     }
 
     public Metrics getMetrics() {
-        long totalJobsInQueue = jedis.llen(QUEUE_NAME);
-        return new Metrics(totalJobsInQueue, jobsDone.get(), jobsFailed.get());
+        String redisHost = System.getenv().getOrDefault("REDIS_HOST", "localhost");
+
+        try (Jedis jedis = new Jedis(redisHost, 6379)) {
+            long totalJobsInQueue = jedis.llen(QUEUE_NAME);
+            return new Metrics(totalJobsInQueue, jobsDone.get(), jobsFailed.get());
+        } catch (Exception e) {
+            log.error("Failed to fetch queue metrics from Redis", e);
+            return new Metrics(0, jobsDone.get(), jobsFailed.get());
+        }
     }
 }
