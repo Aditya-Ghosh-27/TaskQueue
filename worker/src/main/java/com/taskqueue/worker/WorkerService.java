@@ -27,7 +27,7 @@ public class WorkerService {
     }
 
     private void runLoop() {
-
+        // try-with-resources use korle connection auto-close hoy, crash kore na
         try (Jedis jedis = new Jedis("localhost", 6379)) {
             System.out.println("Worker thread started using BRPOP. Waiting for tasks...");
             while (true) {
@@ -50,7 +50,7 @@ public class WorkerService {
 
     private void processTask(Task task) {
         System.out.println("Processing task: " + task.getType());
-
+        // Author-er switch-case logic (Better for variety)
         switch (task.getType()) {
             case "send_email":
                 System.out.println("Sending email to " + task.getPayload().get("to"));

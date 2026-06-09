@@ -17,7 +17,7 @@ public class WorkerController {
 
     @GetMapping("/metrics")
     public ResponseEntity<Metrics> getMetrics() {
-
+        // Service theke metrics niye return korbe
         return ResponseEntity.ok(workerService.getMetrics());
     }
 }
