@@ -3,6 +3,7 @@ package com.taskqueue.producer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskqueue.common.Task;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import redis.clients.jedis.Jedis;
 
+@Slf4j
 @RestController
 public class ProducerController {
 
@@ -28,12 +30,14 @@ public class ProducerController {
             String taskJson = objectMapper.writeValueAsString(task);
             jedis.lpush(QUEUE_NAME, taskJson);
 
-            System.out.println("Pushed task to queue: " + task.getType());
+            log.info("Successfully pushed task to queue: {}", task.getType());
             return ResponseEntity.ok("Task enqueued successfully: " + task.getType());
 
         } catch (JsonProcessingException e) {
+            log.error("Serialization failed for task: {}", task, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to serialize task");
         } catch (Exception e) {
+            log.error("Failed to connect to Redis at {}:6379", redisHost, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Redis connection failed");
         }
     }

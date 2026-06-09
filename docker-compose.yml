@@ -4,3 +4,23 @@ services:
     container_name: redis
     ports:
       - "6379:6379"
+
+  producer:
+    build: ./producer
+    container_name: taskqueue-producer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+
+  worker:
+    build: ./worker
+    container_name: taskqueue-worker
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis

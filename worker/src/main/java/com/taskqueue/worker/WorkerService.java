@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 @Service
 public class WorkerService {
-    private final Jedis jedis = new Jedis("localhost", 6379);
     private final ObjectMapper objectMapper = new ObjectMapper();
+
     private static final String QUEUE_NAME = "task_queue";
 
     private final AtomicInteger jobsDone = new AtomicInteger(0);
@@ -31,7 +31,7 @@ public class WorkerService {
         String redisHost = System.getenv().getOrDefault("REDIS_HOST", "localhost");
         // try-with-resources use korle connection auto-close hoy, crash kore na
         try (Jedis jedis = new Jedis(redisHost, 6379)) {
-            System.out.println("Worker thread started using BRPOP. Waiting for tasks...");
+            log.info("Worker thread started using BRPOP. Waiting for tasks on host: {}", redisHost);
             while (true) {
                 try {
                     List<String> tasks = jedis.brpop(0, QUEUE_NAME);
@@ -43,7 +43,7 @@ public class WorkerService {
                         jobsDone.incrementAndGet();
                     }
                 } catch (Exception e) {
-                    System.err.println("Error processing task: " + e.getMessage());
+                    log.error("Error processing task: " + e.getMessage());
                     jobsFailed.incrementAndGet();
                 }
             }
@@ -53,17 +53,17 @@ public class WorkerService {
     }
 
     private void processTask(Task task) {
-        System.out.println("Processing task: " + task.getType());
+        log.info("Processing task: {}", task.getType());
         // Author-er switch-case logic (Better for variety)
         switch (task.getType()) {
             case "send_email":
-                System.out.println("Sending email to " + task.getPayload().get("to"));
+                log.info("Sending email to {}", task.getPayload().get("to"));
                 break;
             case "resize_image":
-                System.out.println("Resizing image...");
+                log.info("Resizing image...");
                 break;
             default:
-                System.out.println("Unsupported task: " + task.getType());
+                log.warn("Unsupported task: " + task.getType());
         }
     }
 
