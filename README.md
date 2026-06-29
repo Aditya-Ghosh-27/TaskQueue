@@ -1,101 +1,114 @@
 # TaskQueue
 
-A robust, asynchronous distributed job queue system built with **Spring Boot**, **Redis**, and **Maven**. 
-This project demonstrates the decoupling of **task production and consumption** using a **Producer-Consumer architecture**.
+A robust, asynchronous distributed job queue system built with **Spring Boot**, **Redis**, and **Maven**.
+This project demonstrates the decoupling of **task production and consumption** using a **Producer-Consumer architecture**, complete with automated fault tolerance and a Dead Letter Queue (DLQ) safety net.
 
 ## 🚀 High Level Overview
 
 ![TaskQueue](TaskQueue.png)
 
-The system consists of three main components:
+The system is fully containerized and consists of three main components:
 
 * **Producer (Port 8080):** A Spring Boot REST API that receives tasks and pushes them into a Redis queue.
-* **Redis (Port 6379):** Acts as the message broker/orchestrator, storing the task queue.
-* **Worker (Port 8081):** A background processor that pulls tasks from Redis using the `BRPOP`(Blocking Pop) strategy and executes them. It also provides a monitoring endpoint.
+* **Message Broker (Redis):** Acts as the ultra-fast, in-memory orchestrator, storing the active `task_queue` and the `dead_letter_queue`.
+* **Worker:** A background processor that pulls tasks from Redis using the `BRPOP` (Blocking Pop) strategy. It executes tasks, handles failures and retries, and securely routes poisoned messages to the DLQ.
 
 ## 🛠 Tech Stack
 
 * **Java 21**
 * **Spring Boot 3.x**
-* **Redis** (via Docker)
+* **Redis** (Message Broker)
 * **Jedis** (Redis Client)
+* **Docker & Docker Compose** (Containerization & Orchestration)
 * **Maven** (Multi-module structure)
 * **Lombok**
 
 ## 🏗 Project Structure
 
 * `common/`: Contains shared models like `Task` and `Metrics`.
-* `producer/`: The API gateway for enqueuing jobs.
-* `worker/`: The consumer that processes jobs and serves monitoring data.
+* `producer/`: The API gateway for enqueuing jobs and managing the DLQ.
+* `worker/`: The consumer that processes jobs, handles retries, and serves monitoring data.
+* `docker-compose.yml`: Spins up the entire architecture (Redis, Producer, and Worker) in a single unified network.
 
 ## ⚙️ Key Features
 
 * **Efficient Task Pulling:** Uses `BRPOP` to eliminate CPU wastage by waiting for tasks instead of constant polling.
 * **Asynchronous Processing:** Worker processes tasks in a dedicated background thread, keeping the web server responsive.
-* **Monitoring Dashboard:** A `/metrics` endpoint on the Worker to track live queue size, completed jobs, and failures.
-* **Decoupled Architecture:** Producer and Worker can be scaled independently.
+* **Fault Tolerance & Retries:** If a task crashes, the worker intercepts the failure, decrements a retry counter, and re-queues it.
+* **Dead Letter Queue (DLQ):** Tasks that exhaust their retry limit (default: 3) are safely routed to a separate DLQ to prevent data loss.
+* **DLQ Management API:** Built-in endpoints to inspect failed messages and manually replay them back into the main queue.
+* **Fully Containerized:** Zero manual setup required for the infrastructure.
 
 ## 🚦 How to Run the Project
 
-### 1. Start Redis
-Ensure you have Docker installed and run:
-```bash
+Since the system is now fully containerized, you no longer need to start Redis or the applications manually!
 
-docker run --name redis -p 6379:6379 -d redis
+### 1. Build the project
+From the root directory, compile the "fat" executable JAR files:
+```bash
+  mvn clean install
 ```
 
-### 2. Build the project
+### 2. Spin up the Architecture
 
-From the root directory run
-```bash
-
-mvn clean install
-```
-
-### 3. Start the Producer
-
-Run the ProducerApplication from the producer module. It will start on PORT 8080.
-
-### 4. Start the Worker
-
-Run the WorkerApplication from the worker module. It will start on PORT 8081.
-
-### 5. Send Tasks
-
-Use curl command to send tasks from the terminal
+Use Docker Compose to build the images and launch the Producer, Worker, and Redis broker simultaneously:
 
 ```bash
-
-for i in {1..5}; do
-  curl -s -X POST http://$(hostname).local:8080/enqueue \
-  -H "Content-Type: application/json" \
-  -d "{\"type\": \"send_email\", \"retries\": 3, \"payload\": {\"to\": \"user$i@example.com\", \"subject\": \"Load Test $i\"}}"
-  echo "Task $i Sent!"
-done
+    docker compose up --build
 ```
 
-### 6. Monitor Progress
+## 🌐 API Reference & Testing
 
-Open your browser and visit: http://localhost:8081/metrics
+You can verify the system's fault tolerance using a "Chaos Demo." The worker is configured to simulate a crash if the target email contains the word `"fail"`.
 
-### 📊 Metrics Explained
+Open your terminal and run this script to send 5 valid tasks and 5 poisoned tasks:
 
-- total_jobs_in_queue: Number of tasks currently waiting in Redis.
-- jobs_done: Successfully processed tasks.
-- jobs_failed: Tasks that encountered errors during execution.
+```bash
+# 1. Send 5 Valid Tasks (Will Succeed)
+    for i in {1..5}; do
+        curl -s -X POST http://localhost:8080/enqueue \
+        -H "Content-Type: application/json" \
+        -d "{\"type\": \"send_email\", \"retries\": 3, \"payload\": {\"to\": \"success$i@example.com\"}}"
+    done
 
-### ➕ Additional Features
+# 2. Send 5 Poisoned Tasks (Will Crash -> Retry -> DLQ)
+    for i in {1..5}; do
+        curl -s -X POST http://localhost:8080/enqueue \
+        -H "Content-Type: application/json" \
+        -d "{\"type\": \"send_email\", \"retries\": 3, \"payload\": {\"to\": \"fail$i@example.com\"}}"
+    done
+```
 
-**Efficient Resource Management (Blocking I/O)**:
 
-The project implements the BRPOP (Blocking Pop) command instead of traditional
-polling. This means the Worker thread "sleeps" and consumes zero CPU cycles while the
-queue is empty, instantly waking up only when a new task arrives.
+## Managing the DLQ
+* **View Failed Tasks:** `GET http://localhost:8080/dlq`
+  *(Returns a JSON array of tasks that exhausted their retries).*
+* **Replay Failed Tasks:** `POST http://localhost:8080/dlq/replay`
+  *(Resets the retry counter to 3 and pushes DLQ tasks back to the main queue).*
 
-**Multi-Threaded Monitoring (Non-Blocking)**:
+## 📊 Metrics Explained
 
-By using a dedicated background thread for task processing, the Worker's Tomcat server
-(Port 8081) remains free and responsive. You can check your /metrics
-dashboard even while the Worker is busy processing a long-running task.
+Open your browser and visit: `http://localhost:8081/metrics` (if exposed) or view the logs to track:
+
+* **total_jobs_in_queue:** Number of tasks currently waiting in Redis.
+* **jobs_done:** Successfully processed tasks.
+* **jobs_failed:** Tasks that encountered errors during execution.
+
+
+
+## ➕ Additional Features
+**Efficient Resource Management (Blocking I/O):**
+
+The project implements the BRPOP (Blocking Pop) command instead 
+of traditional polling. This means the Worker thread "sleeps" and
+consumes zero CPU cycles while the queue is empty, instantly 
+waking up only when a new task arrives.
+
+**Multi-Threaded Monitoring (Non-Blocking):**
+
+By using a dedicated background thread for task processing, 
+the Worker's server remains free and responsive. You can check 
+your /metrics dashboard even while the Worker is busy processing 
+a long-running task.
 
 Created by Aditya
