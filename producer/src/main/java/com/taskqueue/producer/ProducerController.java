@@ -6,10 +6,13 @@ import com.taskqueue.common.Task;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import redis.clients.jedis.Jedis;
+
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -17,6 +20,7 @@ public class ProducerController {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private static final String QUEUE_NAME = "task_queue";
+    private static final String DLQ_NAME = "dead_letter_queue";
 
     @PostMapping("/enqueue")
     public ResponseEntity<String> enqueueTask(@RequestBody Task task) {
@@ -39,6 +43,22 @@ public class ProducerController {
         } catch (Exception e) {
             log.error("Failed to connect to Redis at {}:6379", redisHost, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Redis connection failed");
+        }
+    }
+
+    // Management endpoint to view the DLQ
+    @GetMapping("/dlq")
+    public ResponseEntity<List<String>> viewDeadLetterQueue() {
+        String redisHost = System.getenv().getOrDefault("REDIS_HOST", "localhost");
+
+        try (Jedis jedis  = new Jedis(redisHost, 6379)) {
+            List<String> deadLetters = jedis.lrange(DLQ_NAME, 0, -1);
+
+            log.info("Fetched {} poisoned tasks from the Dead Letter Queue", deadLetters.size());
+            return ResponseEntity.ok(deadLetters);
+        } catch (Exception e) {
+            log.error("Failed to connect to Redis to fetch DLQ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
 }
