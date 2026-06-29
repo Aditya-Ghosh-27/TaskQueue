@@ -61,4 +61,40 @@ public class ProducerController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
+
+
+    // Management endpoint to replay the Dead Letter Queue
+    @PostMapping("/dlq/replay")
+    public ResponseEntity<String> replayDeadLetterQueue() {
+        String redisHost = System.getenv().getOrDefault("REDIS_HOST", "localhost");
+        int replayedCount = 0;
+
+        try (Jedis jedis = new Jedis(redisHost, 6379)) {
+            // 1. Fetch all poisoned tasks
+            List<String> deadLetters = jedis.lrange(DLQ_NAME, 0, -1);
+
+            if (deadLetters.isEmpty()) {
+                return ResponseEntity.ok("DLQ is empty. Nothing to replay!");
+            }
+
+            // 2. Loop through them, reset retries, and push back to the main queue
+            for (String taskJson : deadLetters) {
+                Task task = objectMapper.readValue(taskJson, Task.class);
+                task.setRetries(3); // Reset the safety net
+
+                String resetTaskJson = objectMapper.writeValueAsString(task);
+                jedis.lpush(QUEUE_NAME, resetTaskJson);
+                replayedCount++;
+            }
+
+            // 3. Clear the DLQ since we moved everything back
+            jedis.del(DLQ_NAME);
+
+            log.info("Successfully replayed {} tasks from the DLQ", replayedCount);
+            return ResponseEntity.ok("Replayed " + replayedCount + " tasks back to the main queue.");
+        } catch (Exception e) {
+            log.error("Failed to replay DLQ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to replay tasks");
+        }
+    }
 }

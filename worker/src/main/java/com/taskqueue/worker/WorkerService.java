@@ -91,9 +91,9 @@ public class WorkerService {
                 log.info("Sending email to {}", emailTo);
 
                 // If the email address contains the word "fail", simulate a crash!
-                if(emailTo.contains("fail")) {
-                    throw new RuntimeException("503 Service Unavailable. API Connection Dropped for: " + emailTo);
-                }
+//                if(emailTo.contains("fail")) {
+//                    throw new RuntimeException("503 Service Unavailable. API Connection Dropped for: " + emailTo);
+//                }
 
                 log.info("SUCESS: Email successfully sent to {}", emailTo);
                 break;
