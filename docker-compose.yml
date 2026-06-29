@@ -24,18 +24,3 @@ services:
       - redis
     environment:
       - REDIS_HOST=redis
-
-  postgres:
-    image: postgres:15-alpine
-    container_name: taskqueue-postgres
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: task_history
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-
-volumes:
-  pg_data
