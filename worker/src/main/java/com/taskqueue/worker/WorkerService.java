@@ -86,10 +86,17 @@ public class WorkerService {
         // Author-er switch-case logic (Better for variety)
         switch (task.getType()) {
             case "send_email":
-                log.info("Sending email to {}", task.getPayload().get("to"));
-                // SIMULATED CRASH: We throw an exception to pretend the Email API is offline
-                throw new RuntimeException("503 Service Unavailable: Email API is down!");
-//                break;
+                // Extract the email address as a String
+                String emailTo = String.valueOf(task.getPayload().get("to"));
+                log.info("Sending email to {}", emailTo);
+
+                // If the email address contains the word "fail", simulate a crash!
+                if(emailTo.contains("fail")) {
+                    throw new RuntimeException("503 Service Unavailable. API Connection Dropped for: " + emailTo);
+                }
+
+                log.info("SUCESS: Email successfully sent to {}", emailTo);
+                break;
             case "resize_image":
                 log.info("Resizing image...");
                 break;
